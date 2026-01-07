@@ -6,31 +6,33 @@ use Illuminate\Database\Eloquent\Model;
 
 class Investment extends Model
 {
-      protected $fillable = [
+    protected $fillable = [
         'user_id',
         'name',
-        'type',
-        'buy_price',
-        'current_price',
-        'quantity',
-        'total_invested',
-        'profit_loss',
-        'auto_update',
-        'symbol',
-        'api_source',
-        'api_field',
-        'api_path',
+        'type',           // bank | stock
+
+        'buy_price',      // bank: tiền gốc | stock: giá mua
+        'current_price',  // bank = buy_price | stock: giá hiện tại
+        'quantity',       // bank = 1 | stock = số lượng
+
+        // Bank only
+        'interest_rate',  // % / năm
+        'start_date',     // ngày gửi
+        'bank_name',      // tên ngân hàng
     ];
 
     protected $casts = [
-        'buy_price' => 'float',
+        'buy_price'     => 'float',
         'current_price' => 'float',
-        'quantity' => 'float',
-        'total_invested' => 'float',
-        'profit_loss' => 'float',
-        'auto_update' => 'boolean',
+        'quantity'      => 'float',
+        'interest_rate' => 'float',
+        'start_date'    => 'date',
+        'bank_name'    => 'string',
     ];
 
+    // =========================
+    // RELATION
+    // =========================
     public function user()
     {
         return $this->belongsTo(User::class);

@@ -70,7 +70,10 @@ Route::middleware('auth:api')->group(function () {
     Route::get('saving/{id}/transactions', [SavingTransactionController::class, 'index']);
     Route::post('saving_transaction', [SavingTransactionController::class, 'store']);
 
-    Route::apiResource('investments', InvestmentController::class);
+    Route::get('investments',        [InvestmentController::class, 'index']);
+    Route::post('investments',       [InvestmentController::class, 'store']);
+    Route::put('investments/{id}',   [InvestmentController::class, 'update']); // stock only
+    Route::delete('investments/{id}',[InvestmentController::class, 'destroy']);
 
 });
 
