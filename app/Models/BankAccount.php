@@ -24,9 +24,22 @@ class BankAccount extends Model
 
     protected $casts = [
         'initamount' => 'double',
-        'balance' => 'double',
+        'balance'    => 'double',
         'is_deleted' => 'boolean',
     ];
+
+    /**
+     * 🔥 TỰ ĐỘNG GÁN BALANCE = INITAMOUNT KHI TẠO
+     * → Chống quên, chống lỗi nghiệp vụ
+     */
+    protected static function booted()
+    {
+        static::creating(function ($account) {
+            if ($account->balance === null) {
+                $account->balance = $account->initamount ?? 0;
+            }
+        });
+    }
 
     public function user()
     {

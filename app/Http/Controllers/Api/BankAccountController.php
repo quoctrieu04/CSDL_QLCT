@@ -17,7 +17,7 @@ class BankAccountController extends Controller
         $user = Auth::user();
 
         $accounts = BankAccount::where('user_id', $user->id)
-            ->where('is_deleted', 0) // chỉ lấy tài khoản chưa bị xóa
+            ->where('is_deleted', 0)
             ->orderByDesc('id')
             ->get();
 
@@ -26,28 +26,41 @@ class BankAccountController extends Controller
 
     /**
      * ✅ Tạo tài khoản ngân hàng mới
+     * 🔥 FIX: parse tiền đúng kể cả khi Flutter gửi "3.000.000"
      */
     public function store(Request $request)
     {
         $user = Auth::user();
 
         $validated = $request->validate([
-            'name'        => 'required|string|max:255',  // Flutter gửi "name"
-            'bankname'    => 'nullable|string|max:255',
-            'banknumber'  => 'nullable|string|max:100',
-            'initamount'  => 'nullable|numeric|min:0',
-            'balance'     => 'nullable|numeric|min:0',
-            'currency'    => 'required|string|max:10',
+            'name'       => 'required|string|max:255',
+            'bankname'   => 'nullable|string|max:255',
+            'banknumber' => 'nullable|string|max:100',
+            // ❌ KHÔNG dùng numeric nữa
+            'initamount' => 'required',
+            'currency'   => 'required|string|max:10',
         ]);
+
+        // ===============================
+        // 🔥 CHUẨN HOÁ TIỀN
+        // "3.000.000" → 3000000
+        // ===============================
+        $rawInit = $validated['initamount'];
+
+        if (is_string($rawInit)) {
+            $initAmount = (float) str_replace(['.', ','], ['', '.'], $rawInit);
+        } else {
+            $initAmount = (float) $rawInit;
+        }
 
         $account = BankAccount::create([
             'user_id'    => $user->id,
-            'title'      => $validated['name'],  // map từ "name" sang "title"
+            'title'      => $validated['name'],
             'bankname'   => $validated['bankname'] ?? null,
             'banknumber' => $validated['banknumber'] ?? null,
-            'initamount' => $validated['initamount'] ?? 0,
-            'balance'    => $validated['balance'] ?? ($validated['initamount'] ?? 0),
-            'currency'   => $validated['currency'] ?? 'VND',
+            'initamount' => $initAmount,
+            'balance'    => $initAmount, // 🔥 SET CHUẨN Ở SERVER
+            'currency'   => $validated['currency'],
             'is_deleted' => 0,
         ]);
 
@@ -55,7 +68,7 @@ class BankAccountController extends Controller
     }
 
     /**
-     * ✅ Cập nhật thông tin tài khoản
+     * ✅ Cập nhật thông tin tài khoản (KHÔNG ĐỘNG TIỀN)
      */
     public function update(Request $request, $id)
     {
@@ -69,7 +82,6 @@ class BankAccountController extends Controller
             'name'       => 'nullable|string|max:255',
             'bankname'   => 'nullable|string|max:255',
             'banknumber' => 'nullable|string|max:100',
-            'balance'    => 'nullable|numeric|min:0',
             'currency'   => 'nullable|string|max:10',
         ]);
 
@@ -77,7 +89,6 @@ class BankAccountController extends Controller
             'title'      => $validated['name'] ?? $account->title,
             'bankname'   => $validated['bankname'] ?? $account->bankname,
             'banknumber' => $validated['banknumber'] ?? $account->banknumber,
-            'balance'    => $validated['balance'] ?? $account->balance,
             'currency'   => $validated['currency'] ?? $account->currency,
         ]);
 
@@ -85,22 +96,20 @@ class BankAccountController extends Controller
     }
 
     /**
-     * ✅ Xóa mềm tài khoản (đặt is_deleted = 1)
+     * ✅ Xóa mềm tài khoản
      */
     public function destroy($id)
-{
-    $user = Auth::user();
+    {
+        $user = Auth::user();
 
-    $account = BankAccount::where('user_id', $user->id)
-        ->where('is_deleted', 0)
-        ->findOrFail($id);
+        $account = BankAccount::where('user_id', $user->id)
+            ->where('is_deleted', 0)
+            ->findOrFail($id);
 
-    // ✅ Đặt cờ is_deleted = 1 (xóa mềm)
-    $account->update(['is_deleted' => 1]);
+        $account->update(['is_deleted' => 1]);
 
-    return response()->json(['message' => 'Xóa tài khoản thành công']);
-}
-
+        return response()->json(['message' => 'Xóa tài khoản thành công']);
+    }
 
     /**
      * ✅ Khôi phục tài khoản đã xóa mềm
@@ -119,12 +128,12 @@ class BankAccountController extends Controller
     }
 
     /**
-     * ⚠️ Tính năng đặt tài khoản mặc định - chưa khả dụng
+     * ⚠️ Tính năng đặt tài khoản mặc định - chưa hỗ trợ
      */
     public function makeDefault($id)
     {
         return response()->json([
-            'message' => 'Tính năng đặt tài khoản mặc định chưa được hỗ trợ (chưa có cột is_default trong DB).'
+            'message' => 'Tính năng đặt tài khoản mặc định chưa được hỗ trợ'
         ], 501);
     }
 }

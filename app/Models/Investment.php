@@ -10,7 +10,6 @@ class Investment extends Model
         'user_id',
         'name',
         'type',           // bank | stock
-
         'buy_price',      // bank: tiền gốc | stock: giá mua
         'current_price',  // bank = buy_price | stock: giá hiện tại
         'quantity',       // bank = 1 | stock = số lượng
@@ -19,6 +18,8 @@ class Investment extends Model
         'interest_rate',  // % / năm
         'start_date',     // ngày gửi
         'bank_name',      // tên ngân hàng
+        'term_months',    // số tháng gửi (cho ngân hàng)
+        'accountSource',
     ];
 
     protected $casts = [
@@ -27,7 +28,8 @@ class Investment extends Model
         'quantity'      => 'float',
         'interest_rate' => 'float',
         'start_date'    => 'date',
-        'bank_name'    => 'string',
+        'bank_name'     => 'string',
+        'term_months'   => 'integer',  // Chuyển 'term_months' thành kiểu số nguyên
     ];
 
     // =========================
