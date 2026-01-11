@@ -2,40 +2,50 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class BankTransaction extends Model
 {
-    use HasFactory;
-
-    protected $table = 'bank_transactions';
-
     protected $fillable = [
         'user_id',
+        'bank_id',
         'doc_id',
         'doc_type',
-        'bank_id',
         'amount',
         'prebalance',
         'operation',
         'description',
     ];
 
-    // 🔗 Giao dịch có thể là phiếu thu hoặc phiếu chi
-    public function inInvoice()
+    public static function createLedger(array $data)
     {
-        return $this->belongsTo(InInvoice::class, 'doc_id')->where('doc_type', 'IN');
-    }
+        return DB::transaction(function () use ($data) {
 
-    public function outInvoice()
-    {
-        return $this->belongsTo(OutInvoice::class, 'doc_id')->where('doc_type', 'OUT');
-    }
+            $bank = BankAccount::lockForUpdate()->findOrFail($data['bank_id']);
 
-    // 🔗 Ví / tài khoản
-    public function account()
-    {
-        return $this->belongsTo(BankAccount::class, 'bank_id');
+            $prebalance = $bank->balance;
+
+            // 1️⃣ CẬP NHẬT SỐ DƯ TÀI KHOẢN
+            if ($data['operation'] === -1) {
+                $bank->balance -= $data['amount'];
+            } else {
+                $bank->balance += $data['amount'];
+            }
+
+            $bank->save();
+
+            // 2️⃣ GHI LEDGER (LƯU SỐ DƯ TRƯỚC)
+            return self::create([
+                'user_id'     => $data['user_id'],
+                'bank_id'     => $data['bank_id'],
+                'doc_id'      => $data['doc_id'] ?? null,
+                'doc_type'    => $data['doc_type'],
+                'amount'      => $data['amount'],
+                'prebalance'  => $prebalance,
+                'operation'   => $data['operation'],
+                'description' => $data['description'] ?? null,
+            ]);
+        });
     }
 }

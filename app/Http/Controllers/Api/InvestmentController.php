@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Models\BankTransaction;
+use App\Models\InvestmentTransaction;
 use App\Models\Investment;
 use Illuminate\Support\Facades\Auth;
 
@@ -23,63 +26,89 @@ class InvestmentController extends Controller
      * Tạo khoản đầu tư mới
      */
     public function store(Request $request)
-    {
-        $data = $request->validate([
-            'name' => 'required|string',
-            'type' => 'required|in:bank,stock',
-            'buy_price' => 'required|numeric|min:0',
-            'current_price' => 'nullable|numeric|min:0',
-            'quantity' => 'nullable|numeric|min:0',
+{
+    $user = $request->user();
 
-            // Bank only
-            'interest_rate' => 'nullable|numeric|min:0',
-            'start_date' => 'nullable|date',
-            'bank_name' => 'nullable|string',
+    $data = $request->validate([
+        'name' => 'required|string',
+        'type' => 'required|in:bank,stock',
+        'buy_price' => 'required|numeric|min:1',
+        'accountSource' => 'required|integer',
+        'interest_rate' => 'nullable|numeric',
+        'term_months' => 'nullable|integer',
+        'start_date' => 'nullable|date',
+        'bank_name' => 'nullable|string',
+    ]);
 
-            // Add term_months for bank investments
-            'term_months' => 'nullable|integer|min:1',  // Chỉ cần yêu cầu nếu là loại "bank"
-            'accountSource' => 'nullable|string',
+    return DB::transaction(function () use ($data, $user) {
+
+    // 1️⃣ LẤY BANK ACCOUNT (đúng tên bảng)
+    $bank = DB::table('bankaccounts')
+        ->where('id', $data['accountSource'])
+        ->where('user_id', $user->id)
+        ->lockForUpdate()
+        ->first();
+
+    if (!$bank) {
+        abort(404, 'Bank account not found');
+    }
+
+    if ($bank->balance < $data['buy_price']) {
+        abort(422, 'Số dư không đủ');
+    }
+
+    // 2️⃣ TRỪ TIỀN
+    $newBalance = $bank->balance - $data['buy_price'];
+
+    DB::table('bankaccounts')
+        ->where('id', $bank->id)
+        ->update([
+            'balance' => $newBalance,
+            'updated_at' => now(),
         ]);
 
-        $data['user_id'] = $request->user()->id;
+    // 3️⃣ GHI LEDGER (bank_transactions)
+    DB::table('bank_transactions')->insert([
+        'user_id'     => $user->id,
+        'bank_id'     => $bank->id,
+        'amount'      => $data['buy_price'],
+        'prebalance'  => $bank->balance,
+        'operation'   => -1,
+        'doc_type'    => 'investment',
+        'description' => 'Đầu tư: ' . $data['name'],
+        'created_at'  => now(),
+        'updated_at'  => now(),
+    ]);
 
-        // =========================
-        // CHUẨN HOÁ THEO TYPE
-        // =========================
+    // 4️⃣ TẠO INVESTMENT
+    $investment = Investment::create([
+        'user_id'        => $user->id,
+        'name'           => $data['name'],
+        'type'           => $data['type'],
+        'buy_price'      => $data['buy_price'],
+        'current_price'  => $data['buy_price'],
+        'quantity'       => 1,
+        'interest_rate'  => $data['interest_rate'],
+        'term_months'    => $data['term_months'],
+        'start_date'     => $data['start_date'],
+        'bank_name'      => $data['bank_name'],
+        'accountSource'  => $bank->id,
+    ]);
 
-        // Kiểm tra loại "bank"
-        if ($data['type'] === 'bank') {
-            // Đảm bảo giá trị `current_price` = `buy_price` cho ngân hàng
-            $data['current_price'] = $data['buy_price'];
-            $data['quantity'] = 1;
+    // 5️⃣ INVESTMENT TRANSACTION
+    InvestmentTransaction::create([
+        'user_id'       => $user->id,
+        'investment_id' => $investment->id,
+        'amount'        => $data['buy_price'],
+        'operation'     => 1,
+        'balance'       => $data['buy_price'],
+        'description'   => 'Nhận vốn đầu tư',
+    ]);
 
-            // Nếu là ngân hàng, thêm term_months và kiểm tra kỳ hạn gửi
-            if (isset($data['term_months']) && $data['term_months'] <= 0) {
-                return response()->json(['message' => 'Kỳ hạn gửi phải lớn hơn 0'], 422);
-            }
+    return response()->json($investment, 201);
+});
 
-            // Kiểm tra nếu `bank_name` trống khi là loại ngân hàng
-            if (empty($data['bank_name'])) {
-                return response()->json(['message' => 'Tên ngân hàng không được để trống'], 422);
-            }
-        }
-
-        // Kiểm tra loại "stock"
-        if ($data['type'] === 'stock') {
-            // Kiểm tra và gán `quantity` mặc định nếu không có
-            $data['quantity'] = $data['quantity'] ?? 0;
-            // Nếu không có `current_price`, gán giá trị là `buy_price`
-            $data['current_price'] = $data['current_price'] ?? $data['buy_price'];
-        }
-
-        // Tạo mới khoản đầu tư
-        try {
-            $investment = Investment::create($data);
-            return response()->json($investment, 201);
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Lỗi khi tạo khoản đầu tư', 'error' => $e->getMessage()], 500);
-        }
-    }
+}
 
     /**
      * Cập nhật giá hiện tại (CHỈ dùng cho cổ phiếu)

@@ -70,10 +70,28 @@ Route::middleware('auth:api')->group(function () {
     Route::get('saving/{id}/transactions', [SavingTransactionController::class, 'index']);
     Route::post('saving_transaction', [SavingTransactionController::class, 'store']);
 
-    Route::get('investments',        [InvestmentController::class, 'index']);
-    Route::post('investments',       [InvestmentController::class, 'store']);
-    Route::put('investments/{id}',   [InvestmentController::class, 'update']); // stock only
-    Route::delete('investments/{id}',[InvestmentController::class, 'destroy']);
+   // ========== INVESTMENT ==========
+Route::get('investments',        [InvestmentController::class, 'index']);
+Route::post('investments',       [InvestmentController::class, 'store']);
+Route::put('investments/{id}',   [InvestmentController::class, 'update']);
+Route::delete('investments/{id}',[InvestmentController::class, 'destroy']);
+
+// ========== INVESTMENT TRANSACTIONS ==========
+Route::get(
+    'investments/{id}/transactions',
+    [InvestmentTransactionController::class, 'index']
+);
+
+Route::post(
+    'investments/{id}/deposit',
+    [InvestmentTransactionController::class, 'deposit']
+);
+
+Route::post(
+    'investments/{id}/withdraw',
+    [InvestmentTransactionController::class, 'withdraw']
+);
+
 
 });
 
